@@ -8,7 +8,6 @@ import com.mojang.brigadier.suggestion.SuggestionProvider;
 import net.cozystudios.cozystudiosessentials.CozyStudiosEssentials;
 import net.cozystudios.cozystudiosessentials.data.PlayerData;
 import net.cozystudios.cozystudiosessentials.util.TeleportUtil;
-import net.minecraft.command.CommandRegistryAccess;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;

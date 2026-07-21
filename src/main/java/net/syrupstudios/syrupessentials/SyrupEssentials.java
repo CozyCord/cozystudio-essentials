@@ -30,7 +30,7 @@ public class SyrupEssentials implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		LOGGER.info("Initializing Syrup Essentials");
-		SyrupEssentialsConfig.load();
+		SyrupEssentialsConfig.initialize();
 		CommandRegistrationCallback.EVENT.register((
 				(commandDispatcher, commandBuildContext, commandSelection) -> {
 					TeleportCommands.register(commandDispatcher);

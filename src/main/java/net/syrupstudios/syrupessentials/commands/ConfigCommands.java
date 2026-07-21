@@ -6,6 +6,9 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.syrupstudios.syruplibrary.config.diagnostic.ConfigIssue;
+import net.syrupstudios.syruplibrary.config.diagnostic.ConfigIssueSeverity;
+import net.syrupstudios.syruplibrary.config.diagnostic.ConfigLoadResult;
 import net.syrupstudios.syrupessentials.config.SyrupEssentialsConfig;
 
 public final class ConfigCommands {
@@ -20,12 +23,23 @@ public final class ConfigCommands {
     }
 
     private static int reload(CommandContext<CommandSourceStack> context) {
-        SyrupEssentialsConfig.LoadResult result = SyrupEssentialsConfig.load();
+        ConfigLoadResult result = SyrupEssentialsConfig.reload();
         if (!result.successful()) {
+            String error = result.cause() == null || result.cause().getMessage() == null
+                    ? "see the server log"
+                    : result.cause().getMessage();
             context.getSource().sendFailure(Component.literal(
-                    "Unable to reload Syrup Essentials config: " + result.error()
+                    "Unable to reload Syrup Essentials config: " + error
             ));
             return 0;
+        }
+
+        for (ConfigIssue issue : result.issues()) {
+            if (issue.severity() == ConfigIssueSeverity.WARNING) {
+                context.getSource().sendSuccess(() -> Component.literal(
+                        "Config warning at " + issue.path() + ": " + issue.message()
+                ), false);
+            }
         }
 
         for (ServerPlayer player : context.getSource().getServer().getPlayerList().getPlayers()) {
@@ -34,8 +48,11 @@ public final class ConfigCommands {
 
         String message = "Reloaded Syrup Essentials config from " + SyrupEssentialsConfig.getPath()
                 + ". Command namespace settings take effect after a restart";
-        if (!result.warnings().isEmpty()) {
-            message += " with " + result.warnings().size() + " warning(s); check the server log";
+        long warningCount = result.issues().stream()
+                .filter(issue -> issue.severity() == ConfigIssueSeverity.WARNING)
+                .count();
+        if (warningCount > 0) {
+            message += " with " + warningCount + " warning(s)";
         }
         String successMessage = message;
         context.getSource().sendSuccess(() -> Component.literal(successMessage), true);

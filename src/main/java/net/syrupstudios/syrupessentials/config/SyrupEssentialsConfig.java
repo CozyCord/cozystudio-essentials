@@ -1,379 +1,213 @@
 package net.syrupstudios.syrupessentials.config;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonParseException;
-import com.google.gson.stream.JsonReader;
-import net.fabricmc.loader.api.FabricLoader;
-import net.syrupstudios.syrupessentials.SyrupEssentials;
+import net.syrupstudios.syruplibrary.config.ConfigSection;
+import net.syrupstudios.syruplibrary.config.ConfigSpec;
+import net.syrupstudios.syruplibrary.config.RegisteredConfig;
+import net.syrupstudios.syruplibrary.config.RestartRequirement;
+import net.syrupstudios.syruplibrary.config.SyrupConfigManager;
+import net.syrupstudios.syruplibrary.config.diagnostic.ConfigLoadResult;
+import net.syrupstudios.syruplibrary.config.value.BooleanConfigValue;
+import net.syrupstudios.syruplibrary.config.value.IntConfigValue;
 
-import java.io.IOException;
-import java.io.Reader;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
-import java.util.List;
 
 public final class SyrupEssentialsConfig {
-    private static final String FILE_NAME = "syrup_essentials.json5";
-    private static final Gson GSON = new GsonBuilder().create();
-    private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve(FILE_NAME);
+    public static final ConfigSpec SPEC = ConfigSpec.builder("syrup_essentials")
+            .header(
+                    "Syrup Essentials configuration",
+                    "Run /syrupessentials reload to apply settings that do not require a restart."
+            )
+            .build();
 
-    private static volatile Values values = new Values();
+    private static final BooleanConfigValue REGISTER_ALIAS_AS_WELL_AS_NAMESPACE = SPEC.booleanValue(
+            "register_alias_as_well_as_namespace",
+            false,
+            "Keeps short root commands such as /home available while command namespacing is active.\n"
+                    + "This setting is ignored when register_to_namespace is false.",
+            RestartRequirement.REQUIRED
+    );
+    private static final BooleanConfigValue REGISTER_TO_NAMESPACE = SPEC.booleanValue(
+            "register_to_namespace",
+            false,
+            "Places commands below /syrupessentials to avoid collisions with other mods.",
+            RestartRequirement.REQUIRED
+    );
+
+    private static final ConfigSection TELEPORTATION = SPEC.section(
+            "teleportation", "Travel commands and saved-destination settings.");
+    private static final ConfigSection BACK = TELEPORTATION.section(
+            "back", "Controls the location history used by /back.");
+    private static final BooleanConfigValue BACK_ENABLED = BACK.booleanValue(
+            "enabled", true, "Whether /back is available.");
+    private static final IntConfigValue BACK_MAX = BACK.intValue(
+            "max", 10, 0, 1000,
+            "Number of recent positions retained per player. Set to 0 to disable history storage.");
+
+    private static final ConfigSection HOME = TELEPORTATION.section(
+            "home", "Controls destinations owned by individual players.");
+    private static final BooleanConfigValue HOME_ENABLED = HOME.booleanValue(
+            "enabled", true, "Whether home commands are available.");
+    private static final IntConfigValue HOME_MAX = HOME.intValue(
+            "max", -1, -1, 10000,
+            "Maximum homes per player. Use -1 for no limit.");
+
+    private static final ConfigSection JUMP = TELEPORTATION.section(
+            "jump", "Controls the operator-only /jump command.");
+    private static final BooleanConfigValue JUMP_ENABLED = JUMP.booleanValue(
+            "enabled", true, "Whether /jump is available.");
+    private static final IntConfigValue JUMP_MAX_DISTANCE = JUMP.intValue(
+            "max_distance", 128, 1, 1024,
+            "Furthest block distance that /jump may target.");
+
+    private static final ConfigSection SPAWN = TELEPORTATION.section(
+            "spawn", "Controls travel to the primary world's spawn point.");
+    private static final BooleanConfigValue SPAWN_ENABLED = SPAWN.booleanValue(
+            "enabled", true, "Whether /spawn is available.");
+
+    private static final ConfigSection TPA = TELEPORTATION.section(
+            "tpa", "Controls consent-based teleport requests between online players.");
+    private static final BooleanConfigValue TPA_ENABLED = TPA.booleanValue(
+            "enabled", true, "Whether TPA request commands are available.");
+    private static final IntConfigValue TPA_REQUEST_TIMEOUT = TPA.intValue(
+            "request_timeout", 30, 1, 3600,
+            "Seconds before an unanswered teleport request expires.");
+
+    private static final ConfigSection TPL = TELEPORTATION.section(
+            "tpl", "Controls the operator command for visiting a player's latest recorded position.");
+    private static final BooleanConfigValue TPL_ENABLED = TPL.booleanValue(
+            "enabled", true, "Whether /teleport_last is available.");
+
+    private static final ConfigSection TPX = TELEPORTATION.section(
+            "tpx", "Controls direct operator travel between dimensions.");
+    private static final BooleanConfigValue TPX_ENABLED = TPX.booleanValue(
+            "enabled", true, "Whether /tpx is available.");
+
+    private static final ConfigSection WARP = TELEPORTATION.section(
+            "warp", "Controls shared server destinations managed by warp commands.");
+    private static final BooleanConfigValue WARP_ENABLED = WARP.booleanValue(
+            "enabled", true, "Whether warp commands are available.");
+
+    private static final ConfigSection PERSISTENCE = SPEC.section(
+            "persistence", "Background storage settings for player and world data.");
+    private static final IntConfigValue AUTOSAVE_INTERVAL = PERSISTENCE.intValue(
+            "autosave_interval", 180, 10, 86400,
+            "Seconds between periodic writes of changed data.");
+
+    private static final Values VALUES = new Values();
+    private static volatile RegisteredConfig registered;
 
     private SyrupEssentialsConfig() {
     }
 
+    public static synchronized ConfigLoadResult initialize() {
+        return initialize(SyrupConfigManager.getInstance());
+    }
+
+    static synchronized ConfigLoadResult initialize(SyrupConfigManager manager) {
+        if (registered == null) {
+            registered = manager.register(SPEC);
+            return registered.initialResult();
+        }
+        return registered.initialResult();
+    }
+
+    public static ConfigLoadResult reload() {
+        RegisteredConfig handle = registered;
+        if (handle == null) {
+            return initialize();
+        }
+        return handle.reload();
+    }
+
+    public static RegisteredConfig handle() {
+        RegisteredConfig handle = registered;
+        if (handle == null) {
+            throw new IllegalStateException("Syrup Essentials config has not been initialized");
+        }
+        return handle;
+    }
+
     public static Values get() {
-        return values;
+        return VALUES;
     }
 
     public static Path getPath() {
-        return CONFIG_PATH;
-    }
-
-    public static synchronized LoadResult load() {
-        try {
-            createDefaultFileIfMissing();
-
-            Values loaded;
-            try (Reader fileReader = Files.newBufferedReader(CONFIG_PATH, StandardCharsets.UTF_8);
-                 JsonReader jsonReader = new JsonReader(fileReader)) {
-                jsonReader.setLenient(true);
-                loaded = GSON.fromJson(jsonReader, Values.class);
-            }
-
-            if (loaded == null) {
-                throw new JsonParseException("The config file is empty");
-            }
-
-            List<String> warnings = loaded.validate();
-            values = loaded;
-            SyrupEssentials.LOGGER.info("Loaded config from {}", CONFIG_PATH);
-            warnings.forEach(warning -> SyrupEssentials.LOGGER.warn("Config: {}", warning));
-            return new LoadResult(true, warnings, null);
-        } catch (IOException | JsonParseException | IllegalStateException e) {
-            SyrupEssentials.LOGGER.error("Could not load config from {}; keeping the previous configuration", CONFIG_PATH, e);
-            return new LoadResult(false, List.of(), e.getMessage());
-        }
-    }
-
-    private static void createDefaultFileIfMissing() throws IOException {
-        if (Files.exists(CONFIG_PATH)) {
-            return;
-        }
-
-        Files.createDirectories(CONFIG_PATH.getParent());
-        Files.writeString(
-                CONFIG_PATH,
-                defaultConfig(),
-                StandardCharsets.UTF_8,
-                StandardOpenOption.CREATE_NEW,
-                StandardOpenOption.WRITE
-        );
-        SyrupEssentials.LOGGER.info("Created default config at {}", CONFIG_PATH);
-    }
-
-    private static String defaultConfig() {
-        return """
-                /*
-                 * Syrup Essentials config file
-                 * Run /syrupessentials reload to apply edits that are not marked as restart-only.
-                 */
-                {
-                  /*
-                   * Keeps short root commands such as /home available while command namespacing is active.
-                   * Ignored when register_to_namespace is false.
-                   * Requires a server restart.
-                   * Default: false
-                   */
-                  register_alias_as_well_as_namespace: false,
-                  /*
-                   * Places this mod's commands below /syrupessentials to avoid collisions with other mods.
-                   * When disabled, commands remain at the root, for example /home and /warp.
-                   * Requires a server restart.
-                   * Default: false
-                   */
-                  register_to_namespace: false,
-                  // Settings for travel commands and saved destinations
-                  teleportation: {
-                    // Controls the location history used by /back
-                    back: {
-                      // Default: true
-                      enabled: true,
-                      /*
-                       * Number of recent positions retained for each player.
-                       * Set this to 0 to disable history storage.
-                       * Default: 10 | Range: 0 ~ 1000
-                       */
-                      max: 10
-                    },
-                    // Controls player-owned destinations created with /sethome
-                    home: {
-                      // Default: true
-                      enabled: true,
-                      /*
-                       * Number of homes each player may own. Use -1 to remove the limit.
-                       * Default: -1 | Range: -1 ~ 10000
-                       */
-                      max: -1
-                    },
-                    // Controls the operator-only /jump command
-                    jump: {
-                      // Default: true
-                      enabled: true,
-                      /*
-                       * Furthest block that /jump can target.
-                       * Default: 128 | Range: 1 ~ 1024
-                       */
-                      max_distance: 128
-                    },
-                    // Controls travel to the primary world's spawn point
-                    spawn: {
-                      // Default: true
-                      enabled: true
-                    },
-                    /*
-                     * Controls consent-based teleport requests between online players.
-                     * This covers /tpa, /tpahere, /tpaccept, and /tpdeny.
-                     */
-                    tpa: {
-                      // Default: true
-                      enabled: true,
-                      /*
-                       * Seconds before an unanswered request expires.
-                       * Default: 30 | Range: 1 ~ 3600
-                       */
-                      request_timeout: 30
-                    },
-                    // Controls the operator command for visiting a player's latest recorded position
-                    tpl: {
-                      // Default: true
-                      enabled: true
-                    },
-                    // Controls direct operator travel between dimensions
-                    tpx: {
-                      // Default: true
-                      enabled: true
-                    },
-                    // Controls shared server destinations managed through the warp commands
-                    warp: {
-                      // Default: true
-                      enabled: true
-                    }
-                  },
-                  // Background storage settings for player and world data
-                  persistence: {
-                    /*
-                     * Seconds between periodic writes of changed data.
-                       * Default: 180 | Range: 10 ~ 86400
-                       */
-                    autosave_interval: 180
-                  }
-                }
-                """;
-    }
-
-    public record LoadResult(boolean successful, List<String> warnings, String error) {
+        return handle().path();
     }
 
     public static final class Values {
-        private boolean register_alias_as_well_as_namespace = false;
-        private boolean register_to_namespace = false;
-        private Teleportation teleportation = new Teleportation();
-        private Persistence persistence = new Persistence();
+        private static final Teleportation TELEPORTATION_VALUES = new Teleportation();
+        private static final Persistence PERSISTENCE_VALUES = new Persistence();
 
         public boolean registerAliasAsWellAsNamespace() {
-            return register_alias_as_well_as_namespace;
+            return REGISTER_ALIAS_AS_WELL_AS_NAMESPACE.get();
         }
 
         public boolean registerToNamespace() {
-            return register_to_namespace;
+            return REGISTER_TO_NAMESPACE.get();
         }
 
         public Teleportation teleportation() {
-            return teleportation;
+            return TELEPORTATION_VALUES;
         }
 
         public Persistence persistence() {
-            return persistence;
-        }
-
-        private List<String> validate() {
-            List<String> warnings = new ArrayList<>();
-            if (teleportation == null) {
-                warnings.add("teleportation section is missing; using defaults");
-                teleportation = new Teleportation();
-            }
-            if (persistence == null) {
-                warnings.add("persistence section is missing; using defaults");
-                persistence = new Persistence();
-            }
-
-            teleportation.validate(warnings);
-            persistence.validate(warnings);
-            return List.copyOf(warnings);
+            return PERSISTENCE_VALUES;
         }
     }
 
     public static final class Teleportation {
-        private Tpa tpa = new Tpa();
-        private Home home = new Home();
-        private Toggle warp = new Toggle();
-        private Back back = new Back();
-        private Toggle spawn = new Toggle();
-        private Toggle tpl = new Toggle();
-        private Toggle tpx = new Toggle();
-        private Jump jump = new Jump();
+        private static final Tpa TPA_VALUES = new Tpa();
+        private static final Home HOME_VALUES = new Home();
+        private static final Toggle WARP_VALUES = new Toggle(WARP_ENABLED);
+        private static final Back BACK_VALUES = new Back();
+        private static final Toggle SPAWN_VALUES = new Toggle(SPAWN_ENABLED);
+        private static final Toggle TPL_VALUES = new Toggle(TPL_ENABLED);
+        private static final Toggle TPX_VALUES = new Toggle(TPX_ENABLED);
+        private static final Jump JUMP_VALUES = new Jump();
 
-        public Tpa tpa() {
-            return tpa;
-        }
-
-        public Home home() {
-            return home;
-        }
-
-        public Toggle warp() {
-            return warp;
-        }
-
-        public Back back() {
-            return back;
-        }
-
-        public Toggle spawn() {
-            return spawn;
-        }
-
-        public Toggle teleportLast() {
-            return tpl;
-        }
-
-        public Toggle tpx() {
-            return tpx;
-        }
-
-        public Jump jump() {
-            return jump;
-        }
-
-        private void validate(List<String> warnings) {
-            if (tpa == null) {
-                warnings.add("teleportation.tpa is missing; using defaults");
-                tpa = new Tpa();
-            }
-            if (home == null) {
-                warnings.add("teleportation.home is missing; using defaults");
-                home = new Home();
-            }
-            if (warp == null) {
-                warnings.add("teleportation.warp is missing; using defaults");
-                warp = new Toggle();
-            }
-            if (back == null) {
-                warnings.add("teleportation.back is missing; using defaults");
-                back = new Back();
-            }
-            if (spawn == null) {
-                warnings.add("teleportation.spawn is missing; using defaults");
-                spawn = new Toggle();
-            }
-            if (tpl == null) {
-                warnings.add("teleportation.tpl is missing; using defaults");
-                tpl = new Toggle();
-            }
-            if (tpx == null) {
-                warnings.add("teleportation.tpx is missing; using defaults");
-                tpx = new Toggle();
-            }
-            if (jump == null) {
-                warnings.add("teleportation.jump is missing; using defaults");
-                jump = new Jump();
-            }
-
-            tpa.request_timeout = clamp(
-                    "teleportation.tpa.request_timeout",
-                    tpa.request_timeout,
-                    1,
-                    3600,
-                    warnings
-            );
-            home.max = clamp("teleportation.home.max", home.max, -1, 10000, warnings);
-            back.max = clamp("teleportation.back.max", back.max, 0, 1000, warnings);
-            jump.max_distance = clamp("teleportation.jump.max_distance", jump.max_distance, 1, 1024, warnings);
-        }
+        public Tpa tpa() { return TPA_VALUES; }
+        public Home home() { return HOME_VALUES; }
+        public Toggle warp() { return WARP_VALUES; }
+        public Back back() { return BACK_VALUES; }
+        public Toggle spawn() { return SPAWN_VALUES; }
+        public Toggle teleportLast() { return TPL_VALUES; }
+        public Toggle tpx() { return TPX_VALUES; }
+        public Jump jump() { return JUMP_VALUES; }
     }
 
     public static class Toggle {
-        private boolean enabled = true;
+        private final BooleanConfigValue value;
 
-        public boolean enabled() {
-            return enabled;
+        private Toggle(BooleanConfigValue value) {
+            this.value = value;
         }
+
+        public boolean enabled() { return value.get(); }
     }
 
     public static final class Tpa extends Toggle {
-        private int request_timeout = 30;
-
-        public int requestTimeoutSeconds() {
-            return request_timeout;
-        }
+        private Tpa() { super(TPA_ENABLED); }
+        public int requestTimeoutSeconds() { return TPA_REQUEST_TIMEOUT.get(); }
     }
 
     public static final class Home extends Toggle {
-        private int max = -1;
-
-        public int maxHomes() {
-            return max;
-        }
+        private Home() { super(HOME_ENABLED); }
+        public int maxHomes() { return HOME_MAX.get(); }
     }
 
     public static final class Back extends Toggle {
-        private int max = 10;
-
-        public int maxHistory() {
-            return max;
-        }
+        private Back() { super(BACK_ENABLED); }
+        public int maxHistory() { return BACK_MAX.get(); }
     }
 
     public static final class Jump extends Toggle {
-        private int max_distance = 128;
-
-        public int maxDistance() {
-            return max_distance;
-        }
+        private Jump() { super(JUMP_ENABLED); }
+        public int maxDistance() { return JUMP_MAX_DISTANCE.get(); }
     }
 
     public static final class Persistence {
-        private int autosave_interval = 180;
-
-        public int autosaveIntervalSeconds() {
-            return autosave_interval;
-        }
-
-        public long autosaveIntervalTicks() {
-            return autosave_interval * 20L;
-        }
-
-        private void validate(List<String> warnings) {
-            autosave_interval = clamp(
-                    "persistence.autosave_interval",
-                    autosave_interval,
-                    10,
-                    86400,
-                    warnings
-            );
-        }
-    }
-
-    private static int clamp(String path, int value, int min, int max, List<String> warnings) {
-        int clamped = Math.max(min, Math.min(max, value));
-        if (clamped != value) {
-            warnings.add(path + " must be between " + min + " and " + max + "; using " + clamped);
-        }
-        return clamped;
+        public int autosaveIntervalSeconds() { return AUTOSAVE_INTERVAL.get(); }
+        public long autosaveIntervalTicks() { return AUTOSAVE_INTERVAL.get() * 20L; }
     }
 }

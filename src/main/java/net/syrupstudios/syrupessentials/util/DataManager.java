@@ -6,6 +6,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.storage.LevelResource;
+import net.syrupstudios.syrupessentials.config.SyrupEssentialsConfig;
 import net.syrupstudios.syrupessentials.data.PlayerData;
 import net.syrupstudios.syrupessentials.data.WorldData;
 import org.jetbrains.annotations.Nullable;
@@ -25,15 +26,10 @@ import static net.syrupstudios.syrupessentials.util.SNBTFormatter.formatString;
 public class DataManager {
     private static final String MOD_PATH = "syrup_essential_data";
     private static final String WORLD_PATH = "world_data";
-    //TODO: implement config via data file
-    private static final String DATA_FILE = "data.snbt";
     private static final String PLAYER_PATH = "player_data";
-    private static final String CONFIG_PATH = "config";
-    private static final int SAVE_INTERVAL = 3600;
     private final File dataDirectory;
     private final File worldDirectory;
     private final File playerDirectory;
-    private final File configDirectory;
     private static final Logger LOGGER = LogUtils.getLogger();
     private final MinecraftServer minecraftServer;
     private static final Map<UUID, PlayerData> PLAYERS = new HashMap<>();
@@ -44,13 +40,11 @@ public class DataManager {
         this.dataDirectory = server.getWorldPath(LevelResource.ROOT).resolve(MOD_PATH).toFile();
         this.worldDirectory = dataDirectory.toPath().resolve(WORLD_PATH).toFile();
         this.playerDirectory = dataDirectory.toPath().resolve(PLAYER_PATH).toFile();
-        this.configDirectory = dataDirectory.toPath().resolve(CONFIG_PATH).toFile();
         this.minecraftServer = server;
         
         mkDirsIfNotExisting(dataDirectory);
         mkDirsIfNotExisting(worldDirectory);
         mkDirsIfNotExisting(playerDirectory);
-        mkDirsIfNotExisting(configDirectory);
     }
 
     private void mkDirsIfNotExisting(File file) {
@@ -167,7 +161,7 @@ public class DataManager {
 
     public void onServerTick(){
         currentTick++;
-        if(currentTick % SAVE_INTERVAL == 0){
+        if(currentTick % SyrupEssentialsConfig.get().persistence().autosaveIntervalTicks() == 0){
             savePlayers(minecraftServer);
             saveWorld(minecraftServer);
         }

@@ -11,6 +11,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
+import net.syrupstudios.syrupessentials.config.SyrupEssentialsConfig;
 import net.syrupstudios.syrupessentials.util.DataManager;
 import net.syrupstudios.syrupessentials.util.TeleportPos;
 import org.jetbrains.annotations.Nullable;
@@ -23,7 +24,6 @@ import java.util.UUID;
 @Data
 public class PlayerData {
     private static final Logger LOGGER = LogUtils.getLogger();
-    private static final int MAX_HISTORY_LOCATIONS = 10;
     private final UUID playerId;
     private final String playerName;
     @Nullable
@@ -92,10 +92,7 @@ public class PlayerData {
 
     public void addTeleportHistory(TeleportPos pos) {
         locationHistory.add(pos);
-
-        while (locationHistory.size() > MAX_HISTORY_LOCATIONS) {
-            locationHistory.removeFirst();
-        }
+        trimTeleportHistory();
     }
 
     public void addHome(String name, ServerPlayer serverPlayer){
@@ -109,10 +106,18 @@ public class PlayerData {
     }
 
     public Optional<TeleportPos> popLocationHistory() {
+        trimTeleportHistory();
         if (!locationHistory.isEmpty()) {
             return Optional.of(locationHistory.removeLast());
         }
         return Optional.empty();
+    }
+
+    private void trimTeleportHistory() {
+        int maximumHistory = SyrupEssentialsConfig.get().teleportation().back().maxHistory();
+        while (locationHistory.size() > maximumHistory) {
+            locationHistory.removeFirst();
+        }
     }
 
     public void readNbt(CompoundTag tag){

@@ -2,6 +2,7 @@ package net.syrupstudios.syrupessentials.commands;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.Suggestions;
@@ -18,6 +19,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
+import net.syrupstudios.syrupessentials.config.SyrupEssentialsConfig;
 import net.syrupstudios.syrupessentials.data.PlayerData;
 import net.syrupstudios.syrupessentials.data.WorldData;
 import net.syrupstudios.syrupessentials.util.CommandUtil;
@@ -26,10 +28,12 @@ import net.syrupstudios.syrupessentials.util.TeleportManager;
 import net.syrupstudios.syrupessentials.util.TeleportPos;
 import org.slf4j.Logger;
 
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 import static net.syrupstudios.syrupessentials.util.TeleportManager.teleportPlayer;
 
@@ -37,86 +41,122 @@ public class TeleportCommands {
     private static final Logger LOGGER = LogUtils.getLogger();
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        dispatcher.register(Commands.literal("tpa")
+        boolean registerToNamespace = SyrupEssentialsConfig.get().registerToNamespace();
+        boolean registerAliases = SyrupEssentialsConfig.get().registerAliasAsWellAsNamespace();
+        CommandUtil.setNamespaced(registerToNamespace);
+        LiteralArgumentBuilder<CommandSourceStack> namespace = Commands.literal("syrupessentials");
+        Consumer<LiteralArgumentBuilder<CommandSourceStack>> register = command -> {
+            if (registerToNamespace) {
+                namespace.then(command);
+                if (registerAliases) {
+                    dispatcher.register(command);
+                }
+            } else {
+                dispatcher.register(command);
+            }
+        };
+
+        register.accept(Commands.literal("tpa")
+                .requires(source -> SyrupEssentialsConfig.get().teleportation().tpa().enabled())
                 .then(Commands.argument("player", EntityArgument.player())
                         .executes(TeleportCommands::tpa)));
 
-        dispatcher.register(Commands.literal("tpaccept")
+        register.accept(Commands.literal("tpaccept")
+                .requires(source -> SyrupEssentialsConfig.get().teleportation().tpa().enabled())
                 .then(Commands.argument("UUID", UuidArgument.uuid())
                         .executes(TeleportCommands::tpaAcceptPlayerUUID))
                 .then(Commands.argument("player", EntityArgument.player())
                         .executes(TeleportCommands::tpaAcceptPlayer))
                 .executes(TeleportCommands::tpaAccept));
 
-        dispatcher.register(Commands.literal("tpdeny")
+        register.accept(Commands.literal("tpdeny")
+                .requires(source -> SyrupEssentialsConfig.get().teleportation().tpa().enabled())
                 .then(Commands.argument("UUID", UuidArgument.uuid())
                         .executes(TeleportCommands::tpaDenyPlayerUUID))
                 .then(Commands.argument("player", EntityArgument.player())
                         .executes(TeleportCommands::tpaDenyPlayer))
                 .executes(TeleportCommands::tpaDeny));
 
-        dispatcher.register(Commands.literal("home")
+        register.accept(Commands.literal("home")
+                .requires(source -> SyrupEssentialsConfig.get().teleportation().home().enabled())
                 .then(Commands.argument("home_name", StringArgumentType.string())
                         .suggests(TeleportCommands::suggestHomes)
                         .executes(TeleportCommands::namedHome))
                 .executes(TeleportCommands::home));
 
-        dispatcher.register(Commands.literal("listhomes")
+        register.accept(Commands.literal("listhomes")
+                .requires(source -> SyrupEssentialsConfig.get().teleportation().home().enabled())
                 .executes(TeleportCommands::listHomes));
 
-        dispatcher.register(Commands.literal("delhome")
+        register.accept(Commands.literal("delhome")
+                .requires(source -> SyrupEssentialsConfig.get().teleportation().home().enabled())
                 .then(Commands.argument("home_name", StringArgumentType.string())
                         .suggests(TeleportCommands::suggestHomes)
                         .executes(TeleportCommands::delHome))
                 .executes(TeleportCommands::delDefaultHome));
 
-        dispatcher.register(Commands.literal("sethome")
+        register.accept(Commands.literal("sethome")
+                .requires(source -> SyrupEssentialsConfig.get().teleportation().home().enabled())
                 .then(Commands.argument("home_name", StringArgumentType.string())
                         .executes(TeleportCommands::setHome))
                 .executes(TeleportCommands::setDefaultHome));
 
-        dispatcher.register(Commands.literal("warp")
+        register.accept(Commands.literal("warp")
+                .requires(source -> SyrupEssentialsConfig.get().teleportation().warp().enabled())
                 .then(Commands.argument("warp_name", StringArgumentType.string())
                         .suggests(TeleportCommands::suggestWarps)
                         .executes(TeleportCommands::warp)));
 
-        dispatcher.register(Commands.literal("setwarp")
-                .requires(source -> source.hasPermission(Commands.LEVEL_GAMEMASTERS))
+        register.accept(Commands.literal("setwarp")
+                .requires(source -> SyrupEssentialsConfig.get().teleportation().warp().enabled()
+                        && source.hasPermission(Commands.LEVEL_GAMEMASTERS))
                 .then(Commands.argument("warp_name", StringArgumentType.string())
                         .executes(TeleportCommands::setWarp)));
 
-        dispatcher.register(Commands.literal("teleport_last")
-                .requires(source -> source.hasPermission(Commands.LEVEL_GAMEMASTERS))
+        register.accept(Commands.literal("teleport_last")
+                .requires(source -> SyrupEssentialsConfig.get().teleportation().teleportLast().enabled()
+                        && source.hasPermission(Commands.LEVEL_GAMEMASTERS))
                 .then(Commands.argument("player", EntityArgument.player())
                         .executes(TeleportCommands::teleportLast)));
 
-        dispatcher.register(Commands.literal("delwarp")
-                .requires(source -> source.hasPermission(Commands.LEVEL_GAMEMASTERS))
+        register.accept(Commands.literal("delwarp")
+                .requires(source -> SyrupEssentialsConfig.get().teleportation().warp().enabled()
+                        && source.hasPermission(Commands.LEVEL_GAMEMASTERS))
                 .then(Commands.argument("warp_name", StringArgumentType.string())
                         .suggests(TeleportCommands::suggestWarps)
                         .executes(TeleportCommands::delWarp)));
 
-        dispatcher.register(Commands.literal("tpx")
-                .requires(source -> source.hasPermission(Commands.LEVEL_GAMEMASTERS))
+        register.accept(Commands.literal("tpx")
+                .requires(source -> SyrupEssentialsConfig.get().teleportation().tpx().enabled()
+                        && source.hasPermission(Commands.LEVEL_GAMEMASTERS))
                 .then(Commands.argument("dimension", DimensionArgument.dimension())
                         .executes(TeleportCommands::tpx)));
 
-        dispatcher.register(Commands.literal("listwarps")
+        register.accept(Commands.literal("listwarps")
+                .requires(source -> SyrupEssentialsConfig.get().teleportation().warp().enabled())
                 .executes(TeleportCommands::listWarps));
 
-        dispatcher.register(Commands.literal("back")
+        register.accept(Commands.literal("back")
+                .requires(source -> SyrupEssentialsConfig.get().teleportation().back().enabled())
                 .executes(TeleportCommands::back));
 
-        dispatcher.register(Commands.literal("spawn")
+        register.accept(Commands.literal("spawn")
+                .requires(source -> SyrupEssentialsConfig.get().teleportation().spawn().enabled())
                 .executes(TeleportCommands::spawn));
 
-        dispatcher.register(Commands.literal("tpahere")
+        register.accept(Commands.literal("tpahere")
+                .requires(source -> SyrupEssentialsConfig.get().teleportation().tpa().enabled())
                 .then(Commands.argument("player", EntityArgument.player())
                         .executes(TeleportCommands::tpahere)));
 
-        dispatcher.register(Commands.literal("jump")
-                .requires(source -> source.hasPermission(Commands.LEVEL_GAMEMASTERS))
+        register.accept(Commands.literal("jump")
+                .requires(source -> SyrupEssentialsConfig.get().teleportation().jump().enabled()
+                        && source.hasPermission(Commands.LEVEL_GAMEMASTERS))
                         .executes(TeleportCommands::jump));
+
+        if (registerToNamespace) {
+            dispatcher.register(namespace);
+        }
     }
 
     private static int tpx(CommandContext<CommandSourceStack> context) {
@@ -314,7 +354,11 @@ public class TeleportCommands {
     private static int setDefaultHome(CommandContext<CommandSourceStack> context) {
         try{
             ServerPlayer serverPlayer = context.getSource().getPlayerOrException();
-            DataManager.getOrCreatePlayer(serverPlayer).orElseThrow().addHome("home", serverPlayer);
+            PlayerData player = DataManager.getOrCreatePlayer(serverPlayer).orElseThrow();
+            if (!canSetHome(player, "home", context)) {
+                return 0;
+            }
+            player.addHome("home", serverPlayer);
             CommandUtil.commandSuccess("Successfully set home", context);
             return 1;
         } catch (Exception e) {
@@ -327,7 +371,11 @@ public class TeleportCommands {
         try{
             ServerPlayer serverPlayer = context.getSource().getPlayerOrException();
             String homeName = context.getArgument("home_name", String.class);
-            DataManager.getOrCreatePlayer(serverPlayer).orElseThrow().addHome(homeName, serverPlayer);
+            PlayerData player = DataManager.getOrCreatePlayer(serverPlayer).orElseThrow();
+            if (!canSetHome(player, homeName, context)) {
+                return 0;
+            }
+            player.addHome(homeName, serverPlayer);
             CommandUtil.commandSuccess(
                     String.format("Successfully added home: %s", homeName), context);
         }
@@ -336,6 +384,23 @@ public class TeleportCommands {
             LOGGER.error("Error occurred while trying to set home: {}", e.toString());
         }
         return 1;
+    }
+
+    private static boolean canSetHome(
+            PlayerData player,
+            String homeName,
+            CommandContext<CommandSourceStack> context
+    ) {
+        int maximumHomes = SyrupEssentialsConfig.get().teleportation().home().maxHomes();
+        String normalizedName = homeName.toLowerCase(Locale.ROOT);
+        boolean replacingExistingHome = player.getHomes().getDestinations().containsKey(normalizedName);
+
+        if (!replacingExistingHome && maximumHomes >= 0
+                && player.getHomes().getDestinations().size() >= maximumHomes) {
+            CommandUtil.commandFailure("You have reached the maximum of " + maximumHomes + " homes.", context);
+            return false;
+        }
+        return true;
     }
 
     private static int listHomes(CommandContext<CommandSourceStack> context) {

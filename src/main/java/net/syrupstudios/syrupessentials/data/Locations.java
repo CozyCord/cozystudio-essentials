@@ -7,6 +7,7 @@ import net.syrupstudios.syrupessentials.util.TeleportPos;
 import org.slf4j.Logger;
 
 import java.util.HashMap;
+import java.util.Locale;
 
 
 @Data
@@ -16,7 +17,7 @@ public abstract class Locations {
     private HashMap<String, TeleportPos> destinations;
 
     public void addLocation(String name, TeleportPos teleportPos){
-        name = name.toLowerCase();
+        name = name.toLowerCase(Locale.ROOT);
         destinations.put(name,teleportPos);
         update();
     }

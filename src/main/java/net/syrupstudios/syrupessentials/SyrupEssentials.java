@@ -10,7 +10,9 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
+import net.syrupstudios.syrupessentials.commands.ConfigCommands;
 import net.syrupstudios.syrupessentials.commands.TeleportCommands;
+import net.syrupstudios.syrupessentials.config.SyrupEssentialsConfig;
 import net.syrupstudios.syrupessentials.data.PlayerData;
 import net.syrupstudios.syrupessentials.util.DataManager;
 import net.syrupstudios.syrupessentials.util.TeleportManager;
@@ -28,9 +30,12 @@ public class SyrupEssentials implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		LOGGER.info("Initializing Syrup Essentials");
+		SyrupEssentialsConfig.initialize();
 		CommandRegistrationCallback.EVENT.register((
-				(commandDispatcher, commandBuildContext, commandSelection) ->
-						TeleportCommands.register(commandDispatcher)));
+				(commandDispatcher, commandBuildContext, commandSelection) -> {
+					TeleportCommands.register(commandDispatcher);
+					ConfigCommands.register(commandDispatcher);
+				}));
 
 		ServerLifecycleEvents.SERVER_STARTED.register((server) -> {
 					dataManager = new DataManager(server);

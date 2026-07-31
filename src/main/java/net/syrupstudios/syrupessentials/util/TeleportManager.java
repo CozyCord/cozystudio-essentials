@@ -19,6 +19,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.syrupstudios.syrupessentials.config.SyrupEssentialsConfig;
 import net.syrupstudios.syrupessentials.data.PlayerData;
 import org.slf4j.Logger;
 
@@ -31,7 +32,6 @@ import java.util.UUID;
 public class TeleportManager {
     private static final HashMap<UUID, TeleportRequest> APPROVED_TELEPORTS = new HashMap<>();
     private static final HashMap<UUID, TeleportRequest> TELEPORT_APPROVAL_REQUESTS = new HashMap<>();
-    private static final int TIMEOUT_THRESHOLD = 600; //TODO: replace w/ config timeout
     private static long currentTick;
     private static final Logger LOGGER = LogUtils.getLogger();
 
@@ -57,7 +57,7 @@ public class TeleportManager {
                 new TeleportRequest(
                         receiver.getUUID(),
                         sender,
-                        currentTick + TIMEOUT_THRESHOLD,
+                        currentTick + SyrupEssentialsConfig.get().teleportation().tpa().requestTimeoutSeconds() * 20L,
                         isTpaHere
                 )
         );
@@ -104,7 +104,7 @@ public class TeleportManager {
                                 .withBold(true)
                                 .withClickEvent(new ClickEvent(
                                         ClickEvent.Action.RUN_COMMAND,
-                                        "/tpaccept " + sender.getUUID()
+                                        CommandUtil.commandPath("tpaccept " + sender.getUUID())
                                 ))
                                 .withHoverEvent(new HoverEvent(
                                         HoverEvent.Action.SHOW_TEXT,
@@ -119,7 +119,7 @@ public class TeleportManager {
                                 .withBold(true)
                                 .withClickEvent(new ClickEvent(
                                         ClickEvent.Action.RUN_COMMAND,
-                                        "/tpdeny " + sender.getUUID()
+                                        CommandUtil.commandPath("tpdeny " + sender.getUUID())
                                 ))
                                 .withHoverEvent(new HoverEvent(
                                         HoverEvent.Action.SHOW_TEXT,
@@ -323,7 +323,7 @@ public class TeleportManager {
     public static int jump(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         ServerLevel level = player.serverLevel();
-        double maxDistance = 128.0D;
+        double maxDistance = SyrupEssentialsConfig.get().teleportation().jump().maxDistance();
         Vec3 start = player.getEyePosition();
         Vec3 look = player.getLookAngle();
         Vec3 end = start.add(look.scale(maxDistance));

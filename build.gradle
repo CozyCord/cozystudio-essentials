@@ -53,7 +53,7 @@ dependencies {
 
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
-	modImplementation("net.syrupstudios:syrup_library:0.1.0+1.20.1-fabric")
+	modImplementation "net.syrupstudios:syrup_library:${project.syrup_library_version}"
 	implementation 'com.github.Querz:NBT:6.1'
 
 }
